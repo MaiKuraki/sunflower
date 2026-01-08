@@ -1,1 +1,1 @@
-Tri-Inspector: v1.15.0
+Tri-Inspector: v1.15.1
