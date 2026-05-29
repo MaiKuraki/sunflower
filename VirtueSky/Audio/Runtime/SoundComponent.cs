@@ -1,5 +1,5 @@
 ﻿using System;
-using PrimeTween;
+using VirtueSky.Tweening;
 using UnityEngine;
 using UnityEngine.Events;
 using VirtueSky.Core;
@@ -60,12 +60,13 @@ namespace VirtueSky.Audio
         void FadeInVolumeMusic(AudioClip audioClip, bool isLooping, float endValue, float duration)
         {
             PlayAudioClip(audioClip, isLooping, 0);
-            Tween.AudioVolume(component, endValue, duration);
+            Tween.Create(0, endValue, duration).Bind(value => component.volume = value);
         }
 
         void FadeOutVolumeMusic(float duration, Action fadeCompleted)
         {
-            Tween.AudioVolume(component, 0, duration).OnComplete(fadeCompleted);
+            float startValue = component.volume;
+            Tween.Create(startValue, 0, duration).WithOnComplete(fadeCompleted).Bind(value => component.volume = value);
         }
 
 

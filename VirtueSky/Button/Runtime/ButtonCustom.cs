@@ -1,4 +1,4 @@
-using PrimeTween;
+using VirtueSky.Tweening;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -39,7 +39,7 @@ namespace VirtueSky.UIButton
 
         Vector3 originScale = Vector3.one;
         private bool canShrug = true;
-        private Tween _tween;
+        private TweenHandle _tweenHandle;
 
         protected override void OnEnable()
         {
@@ -90,7 +90,7 @@ namespace VirtueSky.UIButton
         {
             if (isMotion)
             {
-                _tween = Tween.Scale(transform, originScale * scale, .15f, easingTypes);
+                _tweenHandle = Tween.Create(originScale, originScale * scale, 0.15f).WithEase(easingTypes).BindToLocalScale(transform);
             }
         }
 
@@ -110,7 +110,10 @@ namespace VirtueSky.UIButton
         {
             if (isMotion)
             {
-                _tween.Stop();
+                if (_tweenHandle.IsActive)
+                {
+                    _tweenHandle.Complete();
+                }
                 transform.localScale = originScale;
             }
         }
