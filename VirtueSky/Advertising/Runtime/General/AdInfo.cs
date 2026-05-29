@@ -2,13 +2,13 @@ namespace VirtueSky.Ads
 {
     public class AdsInfo
     {
-        public string AdUnitId { get; private set; }
-        public string AdFormat { get; private set; }
-        public string Placement { get; private set; }
-        public string AdNetwork { get; private set; }
-        public double Revenue { get; private set; }
-        public string AdMediation { get; private set; }
-        public string AuctionId { get; private set; }
+        public string AdUnitId { get; internal set; }
+        public string AdFormat { get; internal set; }
+        public string Placement { get; internal set; }
+        public string AdNetwork { get; internal set; }
+        public double Revenue { get; internal set; }
+        public string AdMediation { get; internal set; }
+        public string AuctionId { get; internal set; }
 
 #if VIRTUESKY_APPLOVIN
         public AdsInfo(MaxSdkBase.AdInfo info)
@@ -72,9 +72,9 @@ namespace VirtueSky.Ads
 
     public class AdsError
     {
-        public int ErrorCode { get; private set; }
-        public string ErrorMessage { get; private set; }
-        public string AdMediation { get; private set; }
+        public int ErrorCode { get; internal set; }
+        public string ErrorMessage { get; internal set; }
+        public string AdMediation { get; internal set; }
 
 #if VIRTUESKY_APPLOVIN
         public AdsError(MaxSdkBase.ErrorInfo info)

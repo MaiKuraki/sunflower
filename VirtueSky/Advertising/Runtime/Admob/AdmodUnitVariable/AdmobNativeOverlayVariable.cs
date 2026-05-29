@@ -16,7 +16,7 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class AdmobNativeOverlayVariable : AdmobAdUnitVariable
     {
-        public enum NativeTemplate
+public enum NativeTemplate
         {
             Small,
             Medium
@@ -24,33 +24,34 @@ namespace VirtueSky.Ads
 
         [SerializeField] private bool useTestId;
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
-        [HeaderLine("NativeAd Options", false)] [SerializeField]
+        [HeaderLine("Native Options", false), SerializeField]
         private AdChoicesPlacement adChoicesPlacement;
 
         [SerializeField] private MediaAspectRatio mediaAspectRatio;
         [SerializeField] private VideoOptions videoOptions;
-
 
         [HeaderLine("NativeAd Style", false)] public NativeTemplate nativeTemplate;
         public Color mainBackgroundColor = Color.white;
         public AdsSize adsSize = AdsSize.MediumRectangle;
         public AdsPosition adsPosition = AdsPosition.Bottom;
 
-        //  public NativeTemplateFontStyle nativeTemplateFontStyle;
         private NativeOverlayAd _nativeOverlayAd;
+        private ResponseInfo adsInfo = null;
 #endif
-        private readonly WaitForSeconds _waitReload = new WaitForSeconds(5f);
+        private AdsInfo cacheAdInfo;
+        private string placement = "";
+        private readonly WaitForSeconds _waitReload = new WaitForSeconds(5);
         private IEnumerator _reload;
 
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
+
         /// <summary>
-        /// Init ads and register callback tracking
+        /// Init ads and register callback tracking revenue
         /// </summary>
         public override void Init()
         {
-            if (useTestId)
-            {
-                GetUnitTest();
-            }
+            if (useTestId) GetUnitTest();
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
             paidedCallback += AppTracking.TrackRevenue;
@@ -64,11 +65,8 @@ namespace VirtueSky.Ads
         {
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
-            if (_nativeOverlayAd != null)
-            {
-                Destroy();
-            }
-
+            if (_nativeOverlayAd != null) Destroy();
+            IsLoading = true;
             var adRequest = new AdRequest();
             var option = new NativeAdOptions
             {
@@ -80,6 +78,10 @@ namespace VirtueSky.Ads
 #endif
         }
 
+        /// <summary>
+        /// Check native overlay is ready
+        /// </summary>
+        /// <returns>If true then native overlay ads ready</returns>
         public override bool IsReady()
         {
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
@@ -91,14 +93,18 @@ namespace VirtueSky.Ads
 
         protected override void ShowImpl(string placement = "")
         {
+            this.placement = placement;
+            if (cacheAdInfo != null)
+            {
+                cacheAdInfo.Placement = placement;
+            }
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
-            if (_nativeOverlayAd != null)
-                _nativeOverlayAd.Show();
+            if (_nativeOverlayAd != null) _nativeOverlayAd.Show();
 #endif
         }
 
         /// <summary>
-        /// destroy native overlay ads
+        /// Destroy native overlay ads
         /// </summary>
         public override void Destroy()
         {
@@ -120,7 +126,6 @@ namespace VirtueSky.Ads
             if (_nativeOverlayAd != null) _nativeOverlayAd.Hide();
 #endif
         }
-
 
         /// <summary>
         /// Render native overlay ads default
@@ -262,21 +267,13 @@ namespace VirtueSky.Ads
 #endif
         }
 
-
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
-        public NativeTemplateStyle Style()
+        NativeTemplateStyle Style()
         {
             return new NativeTemplateStyle
             {
                 TemplateId = nativeTemplate.ToString().ToLower(),
-                MainBackgroundColor = mainBackgroundColor,
-                // CallToActionText = new NativeTemplateTextStyle
-                // {
-                //     BackgroundColor = Color.green,
-                //     TextColor = Color.white,
-                //     FontSize = 9,
-                //     Style = nativeTemplateFontStyle
-                // }
+                MainBackgroundColor = mainBackgroundColor
             };
         }
 
@@ -315,56 +312,82 @@ namespace VirtueSky.Ads
             }
 
             _nativeOverlayAd = ad;
+            adsInfo = ad.GetResponseInfo();
             _nativeOverlayAd.OnAdPaid += OnAdPaided;
             _nativeOverlayAd.OnAdClicked += OnAdClicked;
             _nativeOverlayAd.OnAdFullScreenContentOpened += OnAdOpening;
             _nativeOverlayAd.OnAdFullScreenContentClosed += OnAdClosed;
+            CacheAdsInfo();
             OnAdLoaded();
         }
 
         private void OnAdLoaded()
         {
-            var info = new AdsInfo(AdMediation.Admob);
-            Common.CallActionAndClean(ref loadedCallback, info);
-            OnLoadAdEvent?.Invoke(info);
+            IsLoading = false;
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref loadedCallback, cacheAdInfo);
+                OnLoadAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdClosed()
         {
             IsShowing = false;
-            var info = new AdsInfo(AdMediation.Admob);
-            Common.CallActionAndClean(ref closedCallback, info);
-            OnClosedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref closedCallback, cacheAdInfo);
+                OnClosedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdOpening()
         {
             IsShowing = true;
-            var info = new AdsInfo(AdMediation.Admob);
-            Common.CallActionAndClean(ref displayedCallback, info);
-            OnDisplayedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref displayedCallback, cacheAdInfo);
+                OnDisplayedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdClicked()
         {
-            var info = new AdsInfo(AdMediation.Admob);
-            Common.CallActionAndClean(ref clickedCallback, info);
-            OnClickedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref clickedCallback, cacheAdInfo);
+                OnClickedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdPaided(AdValue value)
         {
-            paidedCallback?.Invoke(value.Value / 1000000f,
-                "Admob",
+            cacheAdInfo.Revenue = value.Value / 1000000f;
+
+            paidedCallback?.Invoke(cacheAdInfo.Revenue,
+                cacheAdInfo.AdNetwork,
                 Id,
-                "NativeOverlayAd", AdMediation.Admob.ToString());
+                cacheAdInfo.AdFormat, AdMediation.Admob.ToString());
+        }
+
+        private void CacheAdsInfo()
+        {
+            if (cacheAdInfo != null) cacheAdInfo = null;
+            cacheAdInfo = new AdsInfo(AdMediation.Admob);
+            cacheAdInfo.AdFormat = "NativeOverlayAd";
+            cacheAdInfo.AdNetwork = adsInfo?.GetLoadedAdapterResponseInfo()?.AdSourceName ?? "";
         }
 
         private void OnAdFailedToLoad(LoadAdError error)
         {
-            var errorInfo = new AdsError(error);
-            Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
-            OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            IsLoading = false;
+            var info = new AdsError(error);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, info);
+                OnFailedToLoadAdEvent?.Invoke(info);
+            });
+
             if (_reload != null) App.StopCoroutine(_reload);
             _reload = DelayReload();
             App.StartCoroutine(_reload);
@@ -376,7 +399,8 @@ namespace VirtueSky.Ads
             Load();
         }
 #endif
-        [ContextMenu("Get Id test")]
+
+
         void GetUnitTest()
         {
 #if UNITY_ANDROID

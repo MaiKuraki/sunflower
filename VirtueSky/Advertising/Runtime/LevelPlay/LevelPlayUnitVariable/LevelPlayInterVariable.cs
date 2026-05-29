@@ -17,6 +17,9 @@ namespace VirtueSky.Ads
 #if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
         private LevelPlayInterstitialAd interstitialAd;
 #endif
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
+
         public override void Init()
         {
 #if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
@@ -50,10 +53,12 @@ namespace VirtueSky.Ads
                     interstitialAd.OnAdClosed += InterstitialOnAdClosedEvent;
                 }
 
+                IsLoading = true;
                 interstitialAd.LoadAd();
             }
             catch (Exception e)
             {
+                IsLoading = false;
                 Debug.LogWarning($"LevelPlay interstitial load failed during SDK call, resetting ad instance. {e}");
                 ResetInterstitialAd();
             }
@@ -124,6 +129,7 @@ namespace VirtueSky.Ads
             if (isDestroy) interstitialAd.DestroyAd();
             interstitialAd = null;
 #endif
+            IsLoading = false;
         }
 
 #if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
@@ -142,16 +148,25 @@ namespace VirtueSky.Ads
 
         void InterstitialOnAdLoadedEvent(LevelPlayAdInfo adInfo)
         {
+            IsLoading = false;
             var info = new AdsInfo(adInfo);
-            Common.CallActionAndClean(ref loadedCallback, info);
-            OnLoadAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref loadedCallback, info);
+                OnLoadAdEvent?.Invoke(info);
+            });
         }
 
         void InterstitialOnAdLoadFailed(LevelPlayAdError ironSourceError)
         {
+            IsLoading = false;
             var errorInfo = new AdsError(ironSourceError);
-            Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
-            OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
+                OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            });
+
             ResetInterstitialAd(true);
         }
 
@@ -160,22 +175,31 @@ namespace VirtueSky.Ads
             AdStatic.IsShowingAd = true;
             IsShowing = true;
             var info = new AdsInfo(adInfo);
-            Common.CallActionAndClean(ref displayedCallback, info);
-            OnDisplayedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref displayedCallback, info);
+                OnDisplayedAdEvent?.Invoke(info);
+            });
         }
 
         void InterstitialOnAdClickedEvent(LevelPlayAdInfo adInfo)
         {
             var info = new AdsInfo(adInfo);
-            Common.CallActionAndClean(ref clickedCallback, info);
-            OnClickedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref clickedCallback, info);
+                OnClickedAdEvent?.Invoke(info);
+            });
         }
 
         void InterstitialOnAdDisplayFailedEvent(LevelPlayAdInfo adInfo, LevelPlayAdError adError)
         {
             var errorInfo = new AdsError(adError);
-            Common.CallActionAndClean(ref failedToDisplayCallback, errorInfo);
-            OnFailedToDisplayAdEvent?.Invoke(errorInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToDisplayCallback, errorInfo);
+                OnFailedToDisplayAdEvent?.Invoke(errorInfo);
+            });
             IsShowing = false;
             ResetInterstitialAd(true);
         }
@@ -183,10 +207,13 @@ namespace VirtueSky.Ads
         void InterstitialOnAdClosedEvent(LevelPlayAdInfo adInfo)
         {
             AdStatic.IsShowingAd = false;
-            Common.CallActionAndClean(ref completedCallback);
             var info = new AdsInfo(adInfo);
-            Common.CallActionAndClean(ref closedCallback, info);
-            OnClosedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref completedCallback);
+                Common.CallActionAndClean(ref closedCallback, info);
+                OnClosedAdEvent?.Invoke(info);
+            });
             IsShowing = false;
             ResetInterstitialAd(true);
             Load();

@@ -15,18 +15,20 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class LevelPlayBannerVariable : LevelPlayAdUnitVariable
     {
-        public AdsSize size;
+         public AdsSize size;
         public AdsPosition position;
-        public bool isShowOnLoad;
+        public bool isShowOnLoad = false;
         private bool _isBannerDestroyed = true;
         private bool _isBannerShowing;
         private bool _previousBannerShowStatus;
         private string _placement;
 #if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
         private LevelPlayBannerAd bannerAd;
-        private readonly WaitForSeconds _waitBannerReload = new WaitForSeconds(5f);
-        private IEnumerator _reload;
 #endif
+
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
+
         public override void Init()
         {
 #if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
@@ -58,6 +60,7 @@ namespace VirtueSky.Ads
                 _isBannerDestroyed = false;
             }
 
+            IsLoading = true;
             bannerAd.LoadAd();
 #endif
         }
@@ -97,6 +100,14 @@ namespace VirtueSky.Ads
             Load();
             if (bannerAd != null) bannerAd.ShowAd();
 #endif
+        }
+
+        public override AdUnitVariable Show(string placement = "")
+        {
+            ResetChainCallback();
+            if (!Application.isMobilePlatform || AdStatic.IsRemoveAd || !IsReady()) return this;
+            ShowImpl(placement);
+            return this;
         }
 
         public override void Destroy()
@@ -164,39 +175,56 @@ namespace VirtueSky.Ads
 
         void BannerOnAdLoadedEvent(LevelPlayAdInfo adInfo)
         {
+            IsLoading = false;
             var info = new AdsInfo(adInfo);
-            Common.CallActionAndClean(ref loadedCallback, info);
-            OnLoadAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref loadedCallback, info);
+                OnLoadAdEvent?.Invoke(info);
+            });
         }
 
         void BannerOnAdLoadFailedEvent(LevelPlayAdError ironSourceError)
         {
+            IsLoading = false;
             var errorInfo = new AdsError(ironSourceError);
-            Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
-            OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
+                OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            });
+
             Destroy();
         }
 
         void BannerOnAdClickedEvent(LevelPlayAdInfo adInfo)
         {
             var info = new AdsInfo(adInfo);
-            Common.CallActionAndClean(ref clickedCallback, info);
-            OnClickedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref clickedCallback, info);
+                OnClickedAdEvent?.Invoke(info);
+            });
         }
 
         void BannerOnAdDisplayedEvent(LevelPlayAdInfo adInfo)
         {
-            IsShowing = true;
             var info = new AdsInfo(adInfo);
-            Common.CallActionAndClean(ref displayedCallback, info);
-            OnDisplayedAdEvent?.Invoke(info);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref displayedCallback, info);
+                OnDisplayedAdEvent?.Invoke(info);
+            });
         }
 
         void BannerOnAdDisplayFailedEvent(LevelPlayAdInfo adInfo, LevelPlayAdError adError)
         {
             var errorInfo = new AdsError(adError);
-            Common.CallActionAndClean(ref failedToDisplayCallback, errorInfo);
-            OnFailedToDisplayAdEvent?.Invoke(errorInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToDisplayCallback, errorInfo);
+                OnFailedToDisplayAdEvent?.Invoke(errorInfo);
+            });
         }
 
         void BannerOnAdLeftApplicationEvent(LevelPlayAdInfo adInfo)

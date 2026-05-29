@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using VirtueSky.Core;
 
 
 namespace VirtueSky.Ads
@@ -61,6 +62,12 @@ namespace VirtueSky.Ads
 
         public virtual void Destroy()
         {
+        }
+        protected void ExcuteCallbackOnMainThread(Action action)
+        {
+            if (action == null)
+                return;
+            App.RunOnMainThread(action);
         }
     }
 }

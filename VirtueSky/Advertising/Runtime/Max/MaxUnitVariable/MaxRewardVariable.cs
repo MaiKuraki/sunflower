@@ -18,6 +18,9 @@ namespace VirtueSky.Ads
         private const float FinalizeCloseDelay = 0.2f;
         private DelayHandle _finalizeCloseHandle;
 
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
+
         public override void Init()
         {
 #if VIRTUESKY_ADS && VIRTUESKY_APPLOVIN
@@ -38,6 +41,7 @@ namespace VirtueSky.Ads
         {
 #if VIRTUESKY_ADS && VIRTUESKY_APPLOVIN
             if (string.IsNullOrEmpty(Id)) return;
+            IsLoading = true;
             MaxSdk.LoadRewardedAd(Id);
 #endif
         }
@@ -93,7 +97,7 @@ namespace VirtueSky.Ads
             MaxSdkBase.AdInfo info)
         {
             IsEarnRewarded = true;
-            Common.CallActionAndClean(ref receivedRewardCallback);
+            ExcuteCallbackOnMainThread(() => { Common.CallActionAndClean(ref receivedRewardCallback); });
         }
 
         private void OnAdRevenuePaid(string unit, MaxSdkBase.AdInfo info)
@@ -106,32 +110,57 @@ namespace VirtueSky.Ads
 
         private void OnAdLoadFailed(string unit, MaxSdkBase.ErrorInfo info)
         {
+            IsLoading = false;
             var errorInfo = new AdsError(info);
-            Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
-            OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
+                OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            });
+        }
+
+        private void OnAdClicked(string arg1, MaxSdkBase.AdInfo arg2)
+        {
+            var info = new AdsInfo(arg2);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref clickedCallback, info);
+                OnClickedAdEvent?.Invoke(info);
+            });
         }
 
         private void OnAdDisplayFailed(string unit, MaxSdkBase.ErrorInfo errorInfo,
             MaxSdkBase.AdInfo info)
         {
             var error = new AdsError(errorInfo);
-            Common.CallActionAndClean(ref failedToDisplayCallback, error);
-            OnFailedToDisplayAdEvent?.Invoke(error);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToDisplayCallback, error);
+                OnFailedToDisplayAdEvent?.Invoke(error);
+            });
         }
 
         private void OnAdLoaded(string unit, MaxSdkBase.AdInfo info)
         {
+            IsLoading = false;
             var adsInfo = new AdsInfo(info);
-            Common.CallActionAndClean(ref loadedCallback, adsInfo);
-            OnLoadAdEvent?.Invoke(adsInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref loadedCallback, adsInfo);
+                OnLoadAdEvent?.Invoke(adsInfo);
+            });
         }
 
         private void OnAdHidden(string unit, MaxSdkBase.AdInfo info)
         {
             AdStatic.IsShowingAd = false;
             var adsInfo = new AdsInfo(info);
-            Common.CallActionAndClean(ref closedCallback, adsInfo);
-            OnClosedAdEvent?.Invoke(adsInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref closedCallback, adsInfo);
+                OnClosedAdEvent?.Invoke(adsInfo);
+            });
+
             App.CancelDelay(_finalizeCloseHandle);
             _finalizeCloseHandle = App.Delay(FinalizeCloseDelay, FinalizeClose);
         }
@@ -141,15 +170,11 @@ namespace VirtueSky.Ads
             AdStatic.IsShowingAd = true;
             IsShowing = true;
             var adsInfo = new AdsInfo(info);
-            Common.CallActionAndClean(ref displayedCallback, adsInfo);
-            OnDisplayedAdEvent?.Invoke(adsInfo);
-        }
-
-        private void OnAdClicked(string unit, MaxSdkBase.AdInfo info)
-        {
-            var adsInfo = new AdsInfo(info);
-            Common.CallActionAndClean(ref clickedCallback, adsInfo);
-            OnClickedAdEvent?.Invoke(adsInfo);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref displayedCallback, adsInfo);
+                OnDisplayedAdEvent?.Invoke(adsInfo);
+            });
         }
 
         private void FinalizeClose()
@@ -157,7 +182,7 @@ namespace VirtueSky.Ads
             _finalizeCloseHandle = null;
             if (IsEarnRewarded)
             {
-                Common.CallActionAndClean(ref completedCallback);
+                ExcuteCallbackOnMainThread(() => { Common.CallActionAndClean(ref completedCallback); });
                 IsEarnRewarded = false;
                 ResetFinalizeCloseHandle();
                 IsShowing = false;
@@ -165,7 +190,7 @@ namespace VirtueSky.Ads
                 return;
             }
 
-            Common.CallActionAndClean(ref skippedCallback);
+            ExcuteCallbackOnMainThread(() => { Common.CallActionAndClean(ref skippedCallback); });
             ResetFinalizeCloseHandle();
             IsShowing = false;
             if (!IsReady()) Load();
