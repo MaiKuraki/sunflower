@@ -17,7 +17,13 @@ namespace VirtueSky.Ads
         [NonSerialized] internal Action completedCallback;
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         private InterstitialAd _interstitialAd;
+        private ResponseInfo adsInfo = null;
 #endif
+        private AdsInfo cacheAdInfo;
+        private string placement = "";
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
+
         public override void Init()
         {
             if (useTestId)
@@ -36,6 +42,7 @@ namespace VirtueSky.Ads
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
 
             Destroy();
+            IsLoading = true;
             InterstitialAd.Load(Id, new AdRequest(), AdLoadCallback);
 
 #endif
@@ -50,8 +57,13 @@ namespace VirtueSky.Ads
 #endif
         }
 
-        protected override void ShowImpl(string placement = null)
+        protected override void ShowImpl(string placement = "")
         {
+            this.placement = placement;
+            if (cacheAdInfo != null)
+            {
+                cacheAdInfo.Placement = placement;
+            }
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             _interstitialAd.Show();
 #endif
@@ -70,7 +82,10 @@ namespace VirtueSky.Ads
             _interstitialAd.Destroy();
             _interstitialAd = null;
 #endif
+            IsLoading = false;
         }
+
+        #region Fun Callback
 
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         private void AdLoadCallback(InterstitialAd ad, LoadAdError error)
@@ -83,65 +98,106 @@ namespace VirtueSky.Ads
             }
 
             _interstitialAd = ad;
+            adsInfo = ad.GetResponseInfo();
             _interstitialAd.OnAdPaid += OnAdPaided;
             _interstitialAd.OnAdFullScreenContentClosed += OnAdClosed;
             _interstitialAd.OnAdFullScreenContentFailed += OnAdFailedToShow;
             _interstitialAd.OnAdFullScreenContentOpened += OnAdOpening;
             _interstitialAd.OnAdClicked += OnAdClicked;
+            CacheAdsInfo();
             OnAdLoaded();
         }
 
         private void OnAdClicked()
         {
-            Common.CallActionAndClean(ref clickedCallback);
-            OnClickedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref clickedCallback, cacheAdInfo);
+                OnClickedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdOpening()
         {
             AdStatic.IsShowingAd = true;
             IsShowing = true;
-            Common.CallActionAndClean(ref displayedCallback);
-            OnDisplayedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref displayedCallback, cacheAdInfo);
+                OnDisplayedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdFailedToShow(AdError error)
         {
-            Common.CallActionAndClean(ref failedToDisplayCallback);
-            OnFailedToDisplayAdEvent?.Invoke(error.GetMessage());
+            var errorInfo = new AdsError(error);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToDisplayCallback, errorInfo);
+                OnFailedToDisplayAdEvent?.Invoke(errorInfo);
+            });
+
+            IsShowing = false;
+            Destroy();
+            Load();
         }
 
         private void OnAdClosed()
         {
             AdStatic.IsShowingAd = false;
-            IsShowing = false;
-            Common.CallActionAndClean(ref completedCallback);
-            OnClosedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref completedCallback);
+                Common.CallActionAndClean(ref closedCallback, cacheAdInfo);
+                OnClosedAdEvent?.Invoke(cacheAdInfo);
+            });
             Destroy();
+            IsShowing = false;
+            Load();
         }
 
         private void OnAdPaided(AdValue value)
         {
-            paidedCallback?.Invoke(value.Value / 1000000f,
-                "Admob",
+            cacheAdInfo.Revenue = value.Value / 1000000f;
+
+            paidedCallback?.Invoke(cacheAdInfo.Revenue,
+                cacheAdInfo.AdNetwork,
                 Id,
-                "InterstitialAd", AdMediation.Admob.ToString());
+                cacheAdInfo.AdFormat, AdMediation.Admob.ToString());
+        }
+
+        private void CacheAdsInfo()
+        {
+            if (cacheAdInfo != null) cacheAdInfo = null;
+            cacheAdInfo = new AdsInfo(AdMediation.Admob);
+            cacheAdInfo.AdFormat = "InterstitialAd";
+            cacheAdInfo.AdNetwork = adsInfo?.GetLoadedAdapterResponseInfo()?.AdSourceName ?? "";
         }
 
         private void OnAdLoaded()
         {
-            Common.CallActionAndClean(ref loadedCallback);
-            OnLoadAdEvent?.Invoke();
+            IsLoading = false;
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref loadedCallback, cacheAdInfo);
+                OnLoadAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdFailedToLoad(LoadAdError error)
         {
-            Common.CallActionAndClean(ref failedToLoadCallback);
-            OnFailedToLoadAdEvent?.Invoke(error.GetMessage());
+            IsLoading = false;
+            var errorInfo = new AdsError(error);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
+                OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            });
         }
 #endif
 
-        [ContextMenu("Get Id test")]
+        #endregion
+
         void GetUnitTest()
         {
 #if UNITY_ANDROID

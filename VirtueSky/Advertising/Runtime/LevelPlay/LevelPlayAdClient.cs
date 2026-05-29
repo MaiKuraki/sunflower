@@ -1,6 +1,7 @@
 #if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
 using Unity.Services.LevelPlay;
 #endif
+using UnityEngine;
 using VirtueSky.Core;
 using VirtueSky.Tracking;
 
@@ -13,8 +14,6 @@ namespace VirtueSky.Ads
             adSetting = _adSetting;
         }
 
-        public bool SdkInitializationCompleted { get; private set; }
-
         public override void Initialize()
         {
             SdkInitializationCompleted = false;
@@ -24,6 +23,11 @@ namespace VirtueSky.Ads
                 adSetting.IosAppKey = "8545d445";
             }
 #if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
+            if (adSetting.EnableTestSuite)
+            {
+                LevelPlay.SetMetaData("is_test_suite", "enable");
+            }
+
             App.AddPauseCallback(OnAppStateChange);
             LevelPlay.OnInitSuccess += SdkInitializationCompletedEvent;
             LevelPlay.OnImpressionDataReady += ImpressionDataReadyEvent;
@@ -40,15 +44,18 @@ namespace VirtueSky.Ads
         {
             if (impressionData.Revenue != null)
             {
-                AppTracking.TrackRevenue((double)impressionData.Revenue, impressionData.AdNetwork,
-                    impressionData.MediationAdUnitId,
-                    impressionData.AdFormat, AdMediation.LevelPlay.ToString());
+                adSetting.LevelPlayBannerVariable.OnAdPaidEvent(impressionData);
+                adSetting.LevelPlayInterVariable.OnAdPaidEvent(impressionData);
+                adSetting.LevelPlayRewardVariable.OnAdPaidEvent(impressionData);
             }
         }
 
         private void OnAppStateChange(bool pauseStatus)
         {
-            LevelPlay.SetPauseGame(pauseStatus);
+            if (SdkInitializationCompleted)
+            {
+                LevelPlay.SetPauseGame(pauseStatus);
+            }
         }
 
         void SdkInitializationCompletedEvent(LevelPlayConfiguration config)
@@ -63,20 +70,24 @@ namespace VirtueSky.Ads
 
         public override void LoadBanner()
         {
+            if (!SdkInitializationCompleted) return;
             if (adSetting.LevelPlayBannerVariable == null) return;
             adSetting.LevelPlayBannerVariable.Load();
         }
 
         public override void LoadInterstitial()
         {
-            if (adSetting.LevelPlayInterVariable == null) return;
-            if (!adSetting.LevelPlayInterVariable.IsReady()) adSetting.LevelPlayInterVariable.Load();
+            if (!SdkInitializationCompleted) return;
+            if (adSetting.LevelPlayInterVariable == null || adSetting.LevelPlayInterVariable.IsShowing) return;
+            if (!adSetting.LevelPlayInterVariable.IsReady() && !adSetting.LevelPlayInterVariable.IsLoading) adSetting.LevelPlayInterVariable.Load();
         }
 
         public override void LoadRewarded()
         {
-            if (adSetting.LevelPlayRewardVariable == null) return;
-            if (!adSetting.LevelPlayRewardVariable.IsReady()) adSetting.LevelPlayRewardVariable.Load();
+            if (!SdkInitializationCompleted) return;
+            if (adSetting.LevelPlayRewardVariable == null || adSetting.LevelPlayRewardVariable.IsShowing) return;
+            if (!adSetting.LevelPlayRewardVariable.IsReady() && !adSetting.LevelPlayRewardVariable.IsLoading)
+                adSetting.LevelPlayRewardVariable.Load();
         }
 
         public override void LoadRewardedInterstitial()
@@ -93,6 +104,21 @@ namespace VirtueSky.Ads
 
         public override void LoadNativeOverlay()
         {
+        }
+
+        public override void ShowAdMediationDebugger()
+        {
+#if VIRTUESKY_ADS && VIRTUESKY_LEVELPLAY
+            if (SdkInitializationCompleted)
+            {
+                LevelPlay.LaunchTestSuite();
+                Debug.Log("LevelPlay Test Suite Launched");
+            }
+            else
+            {
+                Debug.LogWarning("Failed to launch LevelPlay Test Suite: SDK initialization not completed.");
+            }
+#endif
         }
     }
 }

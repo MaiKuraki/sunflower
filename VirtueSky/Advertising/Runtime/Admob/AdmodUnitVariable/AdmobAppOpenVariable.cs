@@ -13,7 +13,7 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class AdmobAppOpenVariable : AdmobAdUnitVariable
     {
-        [Tooltip("Automatically show AppOpenAd when app status is changed")]
+       [Tooltip("Automatically show AppOpenAd when app status is changed")]
         public bool autoShow = false;
 
         [Tooltip("Time between closing the previous full-screen ad and starting to show the app open ad - in seconds")]
@@ -22,8 +22,14 @@ namespace VirtueSky.Ads
         public bool useTestId;
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         private AppOpenAd _appOpenAd;
+        private ResponseInfo adsInfo = null;
 #endif
         private DateTime _expireTime;
+        private AdsInfo cacheAdInfo;
+        private string placement = "";
+
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
 
         public override void Init()
         {
@@ -43,6 +49,7 @@ namespace VirtueSky.Ads
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
 
             Destroy();
+            IsLoading = true;
             AppOpenAd.Load(Id, new AdRequest(), OnAdLoadCallback);
 #endif
         }
@@ -57,8 +64,13 @@ namespace VirtueSky.Ads
 #endif
         }
 
-        protected override void ShowImpl(string placement = null)
+        protected override void ShowImpl(string placement = "")
         {
+            this.placement = placement;
+            if (cacheAdInfo != null)
+            {
+                cacheAdInfo.Placement = placement;
+            }
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             _appOpenAd.Show();
 #endif
@@ -73,6 +85,8 @@ namespace VirtueSky.Ads
 #endif
         }
 
+        #region Fun Callback
+
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         private void OnAdLoadCallback(AppOpenAd ad, LoadAdError error)
         {
@@ -84,21 +98,34 @@ namespace VirtueSky.Ads
             }
 
             _appOpenAd = ad;
+            adsInfo = ad.GetResponseInfo();
             _appOpenAd.OnAdPaid += OnAdPaided;
             _appOpenAd.OnAdFullScreenContentClosed += OnAdClosed;
             _appOpenAd.OnAdFullScreenContentFailed += OnAdFailedToShow;
             _appOpenAd.OnAdFullScreenContentOpened += OnAdOpening;
             _appOpenAd.OnAdClicked += OnAdClicked;
+            CacheAdsInfo();
             OnAdLoaded();
 
             // App open ads can be preloaded for up to 4 hours.
             _expireTime = DateTime.Now + TimeSpan.FromHours(4);
         }
 
+        private void CacheAdsInfo()
+        {
+            if (cacheAdInfo != null) cacheAdInfo = null;
+            cacheAdInfo = new AdsInfo(AdMediation.Admob);
+            cacheAdInfo.AdFormat = "AppOpenAd";
+            cacheAdInfo.AdNetwork = adsInfo?.GetLoadedAdapterResponseInfo()?.AdSourceName ?? "";
+        }
+
         private void OnAdClicked()
         {
-            Common.CallActionAndClean(ref clickedCallback);
-            OnClickedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref clickedCallback, cacheAdInfo);
+                OnClickedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdOpening()
@@ -106,14 +133,21 @@ namespace VirtueSky.Ads
             AdStatic.waitAppOpenDisplayedAction?.Invoke();
             AdStatic.IsShowingAd = true;
             IsShowing = true;
-            Common.CallActionAndClean(ref displayedCallback);
-            OnDisplayedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref displayedCallback, cacheAdInfo);
+                OnDisplayedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdFailedToShow(AdError obj)
         {
-            Common.CallActionAndClean(ref failedToDisplayCallback);
-            OnFailedToDisplayAdEvent?.Invoke(obj.GetMessage());
+            var error = new AdsError(obj);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToDisplayCallback, error);
+                OnFailedToDisplayAdEvent?.Invoke(error);
+            });
         }
 
         private void OnAdClosed()
@@ -121,34 +155,48 @@ namespace VirtueSky.Ads
             AdStatic.waitAppOpenClosedAction?.Invoke();
             AdStatic.IsShowingAd = false;
             IsShowing = false;
-            Common.CallActionAndClean(ref closedCallback);
-            OnClosedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref closedCallback, cacheAdInfo);
+                OnClosedAdEvent?.Invoke(cacheAdInfo);
+            });
             Destroy();
         }
 
         private void OnAdPaided(AdValue value)
         {
-            paidedCallback?.Invoke(value.Value / 1000000f,
-                "Admob",
+            cacheAdInfo.Revenue = value.Value / 1000000f;
+
+            paidedCallback?.Invoke(cacheAdInfo.Revenue,
+                cacheAdInfo.AdNetwork,
                 Id,
-                "AppOpenAd", AdMediation.Admob.ToString());
+                cacheAdInfo.AdFormat, AdMediation.Admob.ToString());
         }
 
         private void OnAdLoaded()
         {
-            Common.CallActionAndClean(ref loadedCallback);
-            OnLoadAdEvent?.Invoke();
+            IsLoading = false;
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref loadedCallback, cacheAdInfo);
+                OnLoadAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdFailedToLoad(LoadAdError error)
         {
-            Common.CallActionAndClean(ref failedToLoadCallback);
-            OnFailedToLoadAdEvent?.Invoke(error.GetMessage());
+            IsLoading = false;
+            var errorInfo = new AdsError(error);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
+                OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            });
         }
-
 #endif
 
-        [ContextMenu("Get Id test")]
+        #endregion
+
         void GetUnitTest()
         {
 #if UNITY_ANDROID

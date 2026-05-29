@@ -1,4 +1,5 @@
 using System;
+using VirtueSky.Core;
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
 using GoogleMobileAds.Api;
 #endif
@@ -13,12 +14,23 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class AdmobRewardVariable : AdmobAdUnitVariable
     {
-        public bool useTestId;
+       public bool useTestId;
         [NonSerialized] internal Action completedCallback;
         [NonSerialized] internal Action skippedCallback;
+        [NonSerialized] internal Action receivedRewardCallback;
+
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         private RewardedAd _rewardedAd;
+        private ResponseInfo adsInfo = null;
 #endif
+        private const float FinalizeCloseDelay = 0.2f;
+        private DelayHandle _finalizeCloseHandle;
+        private AdsInfo cacheAdInfo;
+        private string placement = "";
+
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
+
         public override void Init()
         {
             if (useTestId)
@@ -38,6 +50,7 @@ namespace VirtueSky.Ads
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             if (string.IsNullOrEmpty(Id)) return;
             Destroy();
+            IsLoading = true;
             RewardedAd.Load(Id, new AdRequest(), AdLoadCallback);
 #endif
         }
@@ -51,20 +64,16 @@ namespace VirtueSky.Ads
 #endif
         }
 
-        protected override void ShowImpl(string placement = null)
+        protected override void ShowImpl(string placement = "")
         {
+            this.placement = placement;
+            if (cacheAdInfo != null)
+            {
+                cacheAdInfo.Placement = placement;
+            }
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             _rewardedAd.Show(UserRewardEarnedCallback);
 #endif
-        }
-
-        public override AdUnitVariable Show(string placement = null)
-        {
-            ResetChainCallback();
-            if (!UnityEngine.Application.isMobilePlatform || string.IsNullOrEmpty(Id) || !IsReady())
-                return this;
-            ShowImpl(placement);
-            return this;
         }
 
         protected override void ResetChainCallback()
@@ -72,6 +81,17 @@ namespace VirtueSky.Ads
             base.ResetChainCallback();
             completedCallback = null;
             skippedCallback = null;
+            receivedRewardCallback = null;
+            IsEarnRewarded = false;
+        }
+
+        public override AdUnitVariable Show(string placement = "")
+        {
+            ResetChainCallback();
+            if (!UnityEngine.Application.isMobilePlatform || string.IsNullOrEmpty(Id) || !IsReady())
+                return this;
+            ShowImpl(placement);
+            return this;
         }
 
         public override void Destroy()
@@ -82,7 +102,17 @@ namespace VirtueSky.Ads
             _rewardedAd = null;
             IsEarnRewarded = false;
 #endif
+            IsLoading = false;
+            IsShowing = false;
         }
+
+        private void ResetFinalizeCloseHandle()
+        {
+            App.CancelDelay(_finalizeCloseHandle);
+            _finalizeCloseHandle = null;
+        }
+
+        #region Fun Callback
 
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         private void AdLoadCallback(RewardedAd ad, LoadAdError error)
@@ -95,78 +125,128 @@ namespace VirtueSky.Ads
             }
 
             _rewardedAd = ad;
+            adsInfo = ad.GetResponseInfo();
             _rewardedAd.OnAdFullScreenContentClosed += OnAdClosed;
             _rewardedAd.OnAdFullScreenContentFailed += OnAdFailedToShow;
             _rewardedAd.OnAdFullScreenContentOpened += OnAdOpening;
             _rewardedAd.OnAdPaid += OnAdPaided;
             _rewardedAd.OnAdClicked += OnAdClicked;
+            CacheAdsInfo();
             OnAdLoaded();
+        }
+
+        private void CacheAdsInfo()
+        {
+            if (cacheAdInfo != null) cacheAdInfo = null;
+            cacheAdInfo = new AdsInfo(AdMediation.Admob);
+            cacheAdInfo.AdFormat = "RewardedAd";
+            cacheAdInfo.AdNetwork = adsInfo?.GetLoadedAdapterResponseInfo()?.AdSourceName ?? "";
         }
 
         private void OnAdClicked()
         {
-            Common.CallActionAndClean(ref clickedCallback);
-            OnClickedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref clickedCallback, cacheAdInfo);
+                OnClickedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdPaided(AdValue value)
         {
-            paidedCallback?.Invoke(value.Value / 1000000f,
-                "Admob",
+            cacheAdInfo.Revenue = value.Value / 1000000f;
+
+            paidedCallback?.Invoke(cacheAdInfo.Revenue,
+                cacheAdInfo.AdNetwork,
                 Id,
-                "RewardedAd", AdMediation.Admob.ToString());
+                cacheAdInfo.AdFormat, AdMediation.Admob.ToString());
         }
 
         private void OnAdOpening()
         {
             AdStatic.IsShowingAd = true;
             IsShowing = true;
-            Common.CallActionAndClean(ref displayedCallback);
-            OnDisplayedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref displayedCallback, cacheAdInfo);
+                OnDisplayedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdFailedToShow(AdError obj)
         {
-            Common.CallActionAndClean(ref failedToDisplayCallback);
-            OnFailedToDisplayAdEvent?.Invoke(obj.GetMessage());
+            var errorInfo = new AdsError(obj);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToDisplayCallback, errorInfo);
+                OnFailedToDisplayAdEvent?.Invoke(errorInfo);
+            });
+
+            Destroy();
+            Load();
         }
 
         private void OnAdClosed()
         {
             AdStatic.IsShowingAd = false;
-            IsShowing = false;
-            Common.CallActionAndClean(ref closedCallback);
-            OnClosedAdEvent?.Invoke();
-            if (IsEarnRewarded)
+            ExcuteCallbackOnMainThread(() =>
             {
-                Common.CallActionAndClean(ref completedCallback);
-                Destroy();
-                return;
-            }
-
-            Common.CallActionAndClean(ref skippedCallback);
-            Destroy();
+                Common.CallActionAndClean(ref closedCallback, cacheAdInfo);
+                OnClosedAdEvent?.Invoke(cacheAdInfo);
+            });
+            App.CancelDelay(_finalizeCloseHandle);
+            _finalizeCloseHandle = App.Delay(FinalizeCloseDelay, FinalizeClose);
         }
 
         private void OnAdLoaded()
         {
-            Common.CallActionAndClean(ref loadedCallback);
-            OnLoadAdEvent?.Invoke();
+            IsLoading = false;
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref loadedCallback, cacheAdInfo);
+                OnLoadAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private void OnAdFailedToLoad(LoadAdError error)
         {
-            Common.CallActionAndClean(ref failedToLoadCallback);
-            OnFailedToLoadAdEvent?.Invoke(error.GetMessage());
+            IsLoading = false;
+            var errorInfo = new AdsError(error);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
+                OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            });
         }
 
         private void UserRewardEarnedCallback(Reward reward)
         {
             IsEarnRewarded = true;
+            ExcuteCallbackOnMainThread(() => { Common.CallActionAndClean(ref receivedRewardCallback); });
+        }
+
+        private void FinalizeClose()
+        {
+            _finalizeCloseHandle = null;
+            if (IsEarnRewarded)
+            {
+                ExcuteCallbackOnMainThread(() => { Common.CallActionAndClean(ref completedCallback); });
+                IsEarnRewarded = false;
+                ResetFinalizeCloseHandle();
+                Destroy();
+                Load();
+                return;
+            }
+
+            ExcuteCallbackOnMainThread(() => { Common.CallActionAndClean(ref skippedCallback); });
+            ResetFinalizeCloseHandle();
+            Destroy();
+            Load();
         }
 #endif
 
-        [ContextMenu("Get Id test")]
+        #endregion
+
         void GetUnitTest()
         {
 #if UNITY_ANDROID

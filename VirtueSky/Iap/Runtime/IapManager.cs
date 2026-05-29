@@ -1,6 +1,7 @@
 #if VIRTUESKY_IAP
 using System;
-using Cysharp.Threading.Tasks;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Purchasing;
 using UnityEngine.Purchasing.Extension;
@@ -17,7 +18,13 @@ namespace VirtueSky.Iap
     [EditorIcon("icon_controller"), HideMonoScript]
     public class IapManager : BaseMono, IDetailedStoreListener
     {
+        public enum InitType
+        {
+            InitOnStart,
+            InitOnAwake,
+        }
         [Space] [SerializeField] private bool dontDestroyOnLoad = false;
+        [SerializeField] private InitType initType = InitType.InitOnStart;
         [Tooltip("Require"), SerializeField] private IapSetting iapSetting;
 
         [Tooltip("Allows nulls"), SerializeField]
@@ -27,7 +34,6 @@ namespace VirtueSky.Iap
         private IStoreController _controller;
         private IExtensionProvider _extensionProvider;
         private static event Action RestoreEvent;
-        public static event Func<bool> CustomValidatePurchaseEvent;
         public static bool IsInitialized { get; private set; }
         public static void Restore() => RestoreEvent?.Invoke();
 
@@ -36,6 +42,11 @@ namespace VirtueSky.Iap
             if (dontDestroyOnLoad)
             {
                 DontDestroyOnLoad(this.gameObject);
+            }
+
+            if (initType == InitType.InitOnAwake)
+            {
+                StartCoroutine(Init());
             }
         }
 
@@ -57,13 +68,21 @@ namespace VirtueSky.Iap
 
         private void Start()
         {
-            Init();
+            if (initType == InitType.InitOnStart)
+            {
+                StartCoroutine(Init());
+            }
         }
 
-        private async void Init()
+        private IEnumerator Init()
         {
-            if (IsInitialized) return;
-            await UniTask.WaitUntil(() => UnityServiceInitialization.IsUnityServiceReady);
+            if (IsInitialized)
+                yield break;
+
+            while (!UnityServiceInitialization.IsUnityServiceReady)
+            {
+                yield return null;
+            }
             var builder = ConfigurationBuilder.Instance(StandardPurchasingModule.Instance());
             RequestProductData(builder);
             builder.Configure<IGooglePlayConfiguration>();
@@ -108,9 +127,9 @@ namespace VirtueSky.Iap
         {
             if (iapSetting.IsValidatePurchase)
             {
-                if (iapSetting.IsCustomValidatePurchase)
+                if (iapSetting.IsCustomValidatePurchase && iapSetting.ValidatePurchase !=null)
                 {
-                    if ((bool)CustomValidatePurchaseEvent?.Invoke()) PurchaseVerified(purchaseEvent);
+                    if (iapSetting.ValidatePurchase.IsValidate()) PurchaseVerified(purchaseEvent);
                 }
                 else
                 {

@@ -15,18 +15,23 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class AdmobBannerVariable : AdmobAdUnitVariable
     {
-        public AdsSize size = AdsSize.Adaptive;
+       public AdsSize size = AdsSize.Adaptive;
         public AdsPosition position = AdsPosition.Bottom;
         public bool useCollapsible;
         public bool useTestId;
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         private BannerView _bannerView;
+        private ResponseInfo adsInfo = null;
 #endif
-
+        private AdsInfo cacheAdInfo;
         private readonly WaitForSeconds _waitBannerReload = new WaitForSeconds(5f);
         private IEnumerator _reload;
         private bool _isBannerShowing;
         private bool _previousBannerShowStatus;
+        private string placement = "";
+
+        public override bool IsShowing { get; internal set; }
+        public override bool IsLoading { get; internal set; }
 
         public override void Init()
         {
@@ -45,6 +50,7 @@ namespace VirtueSky.Ads
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
             Destroy();
+            IsLoading = true;
             _bannerView = new BannerView(Id, ConvertSize(), ConvertPosition());
             _bannerView.OnAdFullScreenContentClosed += OnAdClosed;
             _bannerView.OnBannerAdLoadFailed += OnAdFailedToLoad;
@@ -59,6 +65,7 @@ namespace VirtueSky.Ads
             }
 
             _bannerView.LoadAd(adRequest);
+
 #endif
         }
 
@@ -96,8 +103,13 @@ namespace VirtueSky.Ads
 #endif
         }
 
-        protected override void ShowImpl(string placement = null)
+        protected override void ShowImpl(string placement = "")
         {
+            this.placement = placement;
+            if (cacheAdInfo != null)
+            {
+                cacheAdInfo.Placement = placement;
+            }
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             _isBannerShowing = true;
             IsShowing = true;
@@ -135,6 +147,7 @@ namespace VirtueSky.Ads
 #endif
         }
 
+        #region Fun Callback
 
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
         public AdSize ConvertSize()
@@ -150,6 +163,12 @@ namespace VirtueSky.Ads
                 //case BannerSize.SmartBanner: return AdSize.SmartBanner;
                 default: return AdSize.Banner;
             }
+        }
+
+        private void OnAdClicked()
+        {
+            Common.CallActionAndClean(ref clickedCallback, cacheAdInfo);
+            OnClickedAdEvent?.Invoke(cacheAdInfo);
         }
 
         public AdPosition ConvertPosition()
@@ -182,34 +201,47 @@ namespace VirtueSky.Ads
 
         private void OnAdPaided(AdValue value)
         {
-            paidedCallback?.Invoke(value.Value / 1000000f,
-                "Admob",
+            cacheAdInfo.Revenue = value.Value / 1000000f;
+
+            paidedCallback?.Invoke(cacheAdInfo.Revenue,
+                cacheAdInfo.AdNetwork,
                 Id,
-                "BannerAd", AdMediation.Admob.ToString());
+                cacheAdInfo.AdFormat, AdMediation.Admob.ToString());
         }
 
-        private void OnAdClicked()
+        private void CacheAdsInfo()
         {
-            Common.CallActionAndClean(ref clickedCallback);
-            OnClickedAdEvent?.Invoke();
+            if (cacheAdInfo != null) cacheAdInfo = null;
+            cacheAdInfo = new AdsInfo(AdMediation.Admob);
+            cacheAdInfo.AdFormat = "BannerAd";
+            cacheAdInfo.AdNetwork = adsInfo?.GetLoadedAdapterResponseInfo()?.AdSourceName ?? "";
         }
 
         private void OnAdOpening()
         {
-            Common.CallActionAndClean(ref displayedCallback);
-            OnDisplayedAdEvent?.Invoke();
+            Common.CallActionAndClean(ref displayedCallback, cacheAdInfo);
+            OnDisplayedAdEvent?.Invoke(cacheAdInfo);
         }
 
         private void OnAdLoaded()
         {
-            Common.CallActionAndClean(ref loadedCallback);
-            OnLoadAdEvent?.Invoke();
+            IsLoading = false;
+            adsInfo = _bannerView?.GetResponseInfo();
+            CacheAdsInfo();
+            Common.CallActionAndClean(ref loadedCallback, cacheAdInfo);
+            OnLoadAdEvent?.Invoke(cacheAdInfo);
         }
 
         private void OnAdFailedToLoad(LoadAdError error)
         {
-            Common.CallActionAndClean(ref failedToLoadCallback);
-            OnFailedToLoadAdEvent?.Invoke(error.GetMessage());
+            IsLoading = false;
+            var errorInfo = new AdsError(error);
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref failedToLoadCallback, errorInfo);
+                OnFailedToLoadAdEvent?.Invoke(errorInfo);
+            });
+
             if (_reload != null) App.StopCoroutine(_reload);
             _reload = DelayBannerReload();
             App.StartCoroutine(_reload);
@@ -217,8 +249,11 @@ namespace VirtueSky.Ads
 
         private void OnAdClosed()
         {
-            Common.CallActionAndClean(ref closedCallback);
-            OnClosedAdEvent?.Invoke();
+            ExcuteCallbackOnMainThread(() =>
+            {
+                Common.CallActionAndClean(ref closedCallback, cacheAdInfo);
+                OnClosedAdEvent?.Invoke(cacheAdInfo);
+            });
         }
 
         private IEnumerator DelayBannerReload()
@@ -228,7 +263,8 @@ namespace VirtueSky.Ads
         }
 #endif
 
-        [ContextMenu("Get Id test")]
+        #endregion
+
         void GetUnitTest()
         {
 #if UNITY_ANDROID

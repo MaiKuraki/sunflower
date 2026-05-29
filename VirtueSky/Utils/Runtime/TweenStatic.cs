@@ -1,9 +1,9 @@
 ﻿using System;
 using JetBrains.Annotations;
-
+#if VIRTUESKY_PRIME_TWEEN
 namespace PrimeTween
 {
-    public static class TweenStatic
+    public static class PrimeTweenExtension
     {
         // target, endValue, duration, ease, cycles, cycleMode, startDelay, endDelay, useUnscaledTime
         // target, startValue, endValue, duration, ease, cycles, cycleMode, startDelay, endDelay, useUnscaledTime
@@ -748,3 +748,4 @@ namespace PrimeTween
         #endregion
     }
 }
+#endif
