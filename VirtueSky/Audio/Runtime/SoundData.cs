@@ -29,11 +29,11 @@ namespace VirtueSky.Audio
         public float fadeOutDuration = .5f;
 
         [Space] public GetType getType = GetType.Random;
-        [SerializeField] private List<AudioClip> audioClips;
+        [SerializeField] private List<AudioClip> audioClips = new List<AudioClip>();
 
         private int sequenceIndex = 0;
-        public int NumberOfAudioClips => audioClips.Count;
-        public List<AudioClip> AudioClips() => audioClips;
+        public int NumberOfAudioClips => audioClips?.Count ?? 0;
+        public List<AudioClip> AudioClips() => audioClips ?? new List<AudioClip>();
 
         public AudioClip GetAudioClip()
         {
