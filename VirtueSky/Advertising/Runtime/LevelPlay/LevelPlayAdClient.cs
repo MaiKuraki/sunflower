@@ -63,7 +63,7 @@ namespace VirtueSky.Ads
             SdkInitializationCompleted = true;
             LoadInterstitial();
             LoadRewarded();
-            LoadBanner();
+            //LoadBanner();
         }
 #endif
 
