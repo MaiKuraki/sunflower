@@ -62,6 +62,14 @@ namespace VirtueSky.Ads
             LoadAppOpen();
             LoadNativeOverlay();
             //LoadBanner();
+            if (adSetting.AdmobEnableTestMode)
+            {
+                foreach (var keyValuePair in initStatus.getAdapterStatusMap())
+                {
+                    Debug.Log(
+                        $"Adapter: {keyValuePair.Key}, Description: {keyValuePair.Value.Description}, Latency: {keyValuePair.Value.Latency}, State: {keyValuePair.Value.InitializationState}");
+                }
+            }
         }
 
         private void TestMode()
