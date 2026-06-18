@@ -7,8 +7,19 @@ using UnityEngine;
 
 namespace VirtueSky.Tracking
 {
+#if VIRTUESKY_APPSFLYER
+    public class AppsFlyerObject : MonoBehaviour, IAppsFlyerConversionData
+#else
     public class AppsFlyerObject : MonoBehaviour
+#endif
     {
+        public static event Action OnAfterInitEvent;
+        public static event Action<string> OnConversionDataSuccessEvent;
+        public static event Action<string> OnConversionDataFailEvent;
+        public static event Action<string> OnAppOpenAttributionEvent;
+        public static event Action<string> OnAppOpenAttributionFailureEvent;
+
+
         private void Awake()
         {
 #if !UNITY_EDITOR
@@ -33,11 +44,42 @@ namespace VirtueSky.Tracking
             AppsFlyer.initSDK(AppsFlyerConfig.DevKey, AppsFlyerConfig.AppID,
                 AppsFlyerConfig.GetConversionData ? this : null);
 #endif
+            OnAfterInitEvent?.Invoke();
             //******************************/
 
-            AppsFlyer.startSDK();
+            if (AppsFlyerConfig.AutoStartSDK)
+            {
+                AppsFlyer.startSDK();
+            }
 
 #endif
+        }
+
+        public static void StartSDK()
+        {
+#if VIRTUESKY_APPSFLYER
+            AppsFlyer.startSDK();
+#endif
+        }
+
+        public void onConversionDataSuccess(string conversionData)
+        {
+            OnConversionDataSuccessEvent?.Invoke(conversionData);
+        }
+
+        public void onConversionDataFail(string error)
+        {
+            OnConversionDataFailEvent?.Invoke(error);
+        }
+
+        public void onAppOpenAttribution(string attributionData)
+        {
+            OnAppOpenAttributionEvent?.Invoke(attributionData);
+        }
+
+        public void onAppOpenAttributionFailure(string error)
+        {
+            OnAppOpenAttributionFailureEvent?.Invoke(error);
         }
     }
 }
