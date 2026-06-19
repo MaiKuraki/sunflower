@@ -17,10 +17,10 @@ namespace VirtueSky.Ads
             MaxSdk.SetSdkKey(adSetting.SdkKey);
             MaxSdkCallbacks.OnSdkInitializedEvent += OnSdkInitialized;
             MaxSdk.InitializeSdk();
-            adSetting.MaxBannerVariable.Init();
-            adSetting.MaxInterVariable.Init();
-            adSetting.MaxRewardVariable.Init();
-            adSetting.MaxAppOpenVariable.Init();
+            adSetting.MaxBannerVariable.Init(adSetting);
+            adSetting.MaxInterVariable.Init(adSetting);
+            adSetting.MaxRewardVariable.Init(adSetting);
+            adSetting.MaxAppOpenVariable.Init(adSetting);
             App.AddPauseCallback(OnAppStateChange);
 #endif
         }
@@ -42,7 +42,7 @@ namespace VirtueSky.Ads
             LoadRewarded();
             LoadRewardedInterstitial();
             LoadAppOpen();
-            LoadBanner();
+           // LoadBanner();
         }
 #endif
 

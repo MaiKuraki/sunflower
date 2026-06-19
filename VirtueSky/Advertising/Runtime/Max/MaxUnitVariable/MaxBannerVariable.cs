@@ -10,7 +10,7 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class MaxBannerVariable : MaxAdUnitVariable
     {
-         public AdsSize size = AdsSize.Banner;
+        public AdsSize size = AdsSize.Banner;
         public AdsPosition position = AdsPosition.Bottom;
 
         private bool _isBannerDestroyed = true;
@@ -21,21 +21,22 @@ namespace VirtueSky.Ads
         public override bool IsShowing { get; internal set; }
         public override bool IsLoading { get; internal set; }
 
-        public override void Init()
+        public override void Init(AdSetting _adSetting)
         {
+            base.Init(_adSetting);
 #if VIRTUESKY_ADS && VIRTUESKY_APPLOVIN
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
-            paidedCallback += AppTracking.TrackRevenue;
+            paidedCallback += TrackRevenue;
             MaxSdkCallbacks.Banner.OnAdLoadedEvent += OnAdLoaded;
             MaxSdkCallbacks.Banner.OnAdExpandedEvent += OnAdExpanded;
             MaxSdkCallbacks.Banner.OnAdLoadFailedEvent += OnAdLoadFailed;
             MaxSdkCallbacks.Banner.OnAdCollapsedEvent += OnAdCollapsed;
             MaxSdkCallbacks.Banner.OnAdRevenuePaidEvent += OnAdRevenuePaid;
             MaxSdkCallbacks.Banner.OnAdClickedEvent += OnAdClicked;
-            if (size != AdsSize.Adaptive)
-            {
-                MaxSdk.SetBannerExtraParameter(Id, "adaptive_banner", "false");
-            }
+            // if (size != AdsSize.Adaptive)
+            // {
+            //     MaxSdk.SetBannerExtraParameter(Id, "adaptive_banner", "false");
+            // }
 #endif
         }
 
@@ -51,7 +52,11 @@ namespace VirtueSky.Ads
                 }
 
                 IsLoading = true;
-                MaxSdk.CreateBanner(Id, ConvertPosition());
+                var config = new MaxSdkBase.AdViewConfiguration(ConvertPosition())
+                {
+                    IsAdaptive = size == AdsSize.Adaptive
+                };
+                MaxSdk.CreateBanner(Id, config);
                 _isBannerDestroyed = false;
             }
 #endif
@@ -117,27 +122,24 @@ namespace VirtueSky.Ads
         #region Fun Callback
 
 #if VIRTUESKY_ADS && VIRTUESKY_APPLOVIN
-        public MaxSdkBase.BannerPosition ConvertPosition()
+        public MaxSdkBase.AdViewPosition ConvertPosition()
         {
             switch (position)
             {
-                case AdsPosition.Top: return MaxSdkBase.BannerPosition.TopCenter;
-                case AdsPosition.Bottom: return MaxSdkBase.BannerPosition.BottomCenter;
-                case AdsPosition.TopLeft: return MaxSdkBase.BannerPosition.TopLeft;
-                case AdsPosition.TopRight: return MaxSdkBase.BannerPosition.TopRight;
-                case AdsPosition.BottomLeft: return MaxSdkBase.BannerPosition.BottomLeft;
-                case AdsPosition.BottomRight: return MaxSdkBase.BannerPosition.BottomRight;
+                case AdsPosition.Top: return MaxSdkBase.AdViewPosition.TopCenter;
+                case AdsPosition.Bottom: return MaxSdkBase.AdViewPosition.BottomCenter;
+                case AdsPosition.TopLeft: return MaxSdkBase.AdViewPosition.TopLeft;
+                case AdsPosition.TopRight: return MaxSdkBase.AdViewPosition.TopRight;
+                case AdsPosition.BottomLeft: return MaxSdkBase.AdViewPosition.BottomLeft;
+                case AdsPosition.BottomRight: return MaxSdkBase.AdViewPosition.BottomRight;
                 default:
-                    return MaxSdkBase.BannerPosition.BottomCenter;
+                    return MaxSdkBase.AdViewPosition.BottomCenter;
             }
         }
 
         private void OnAdRevenuePaid(string unit, MaxSdkBase.AdInfo info)
         {
-            paidedCallback?.Invoke(info.Revenue,
-                info.NetworkName,
-                unit,
-                info.AdFormat, AdMediation.AppLovin.ToString());
+            paidedCallback?.Invoke(new AdsInfo(info));
         }
 
         private void OnAdLoaded(string unit, MaxSdkBase.AdInfo info)

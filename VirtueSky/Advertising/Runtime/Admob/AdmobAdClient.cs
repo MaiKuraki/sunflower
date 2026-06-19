@@ -27,12 +27,12 @@ namespace VirtueSky.Ads
             TestMode();
             MobileAds.Initialize(OnInitializeComplete);
             FirebaseAnalyticTrackingRevenue.autoTrackAdImpressionAdmob = adSetting.AutoTrackingAdImpressionAdmob;
-            adSetting.AdmobBannerVariable.Init();
-            adSetting.AdmobInterVariable.Init();
-            adSetting.AdmobRewardVariable.Init();
-            adSetting.AdmobRewardInterVariable.Init();
-            adSetting.AdmobAppOpenVariable.Init();
-            adSetting.AdmobNativeOverlayVariable.Init();
+            adSetting.AdmobBannerVariable.Init(adSetting);
+            adSetting.AdmobInterVariable.Init(adSetting);
+            adSetting.AdmobRewardVariable.Init(adSetting);
+            adSetting.AdmobRewardInterVariable.Init(adSetting);
+            adSetting.AdmobAppOpenVariable.Init(adSetting);
+            adSetting.AdmobNativeOverlayVariable.Init(adSetting);
 
             RegisterAppStateChange();
 #endif
@@ -56,12 +56,22 @@ namespace VirtueSky.Ads
         private void OnInitializeComplete(InitializationStatus initStatus)
         {
             SdkInitializationCompleted = true;
+            if (adSetting.AdmobEnableTestMode)
+            {
+                Debug.Log("AdMob SDK Initialization Complete");
+                foreach (var keyValuePair in initStatus.getAdapterStatusMap())
+                {
+                    Debug.Log(
+                        $"Adapter: {keyValuePair.Key}, Description: {keyValuePair.Value.Description}, Latency: {keyValuePair.Value.Latency}, State: {keyValuePair.Value.InitializationState}");
+                }
+            }
+
             LoadInterstitial();
             LoadRewarded();
             LoadRewardedInterstitial();
             LoadAppOpen();
             LoadNativeOverlay();
-            LoadBanner();
+            //LoadBanner();
         }
 
         private void TestMode()

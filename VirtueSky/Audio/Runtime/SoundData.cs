@@ -13,29 +13,33 @@ namespace VirtueSky.Audio
         public enum GetType
         {
             Random,
-            Sequence
+            Sequence,
+            Index
         }
 
         [Space] public bool loop = false;
         [Range(0f, 1f)] public float volume = 1;
-
-        [Header("Fade Volume - Only Music"), Tooltip("Only Music Background")]
+        public SoundType soundType;
+        [Space, Header("Fade Volume - Only Music"), Tooltip("Only Music Background")] [ShowIf(nameof(soundType), SoundType.Music)]
         public bool isMusicFadeVolume = false;
 
-        [ShowIf(nameof(isMusicFadeVolume), true)]
+        [ShowIf(nameof(ConditionFadeMusic), true)]
         public float fadeInDuration = .5f;
 
-        [ShowIf(nameof(isMusicFadeVolume), true)]
+        [ShowIf(nameof(ConditionFadeMusic), true)]
         public float fadeOutDuration = .5f;
 
         [Space] public GetType getType = GetType.Random;
-        [SerializeField] private List<AudioClip> audioClips = new List<AudioClip>();
+        [Tooltip("Use Index Clip for GetType Index"), SerializeField]
+        private int indexClip = 0;
 
+        [SerializeField] private List<AudioClip> audioClips = new List<AudioClip>();
+        public bool ConditionFadeMusic => isMusicFadeVolume && soundType == SoundType.Music;
         private int sequenceIndex = 0;
         public int NumberOfAudioClips => audioClips?.Count ?? 0;
         public List<AudioClip> AudioClips() => audioClips ?? new List<AudioClip>();
 
-        public AudioClip GetAudioClip()
+        public AudioClip GetAudioClip(int index = -1)
         {
             if (audioClips.Count > 0)
             {
@@ -55,6 +59,14 @@ namespace VirtueSky.Audio
                         }
 
                         return clip;
+                    case GetType.Index:
+                        if (index >= 0)
+                        {
+                            indexClip = index;
+                        }
+
+                        indexClip = Mathf.Clamp(indexClip, 0, audioClips.Count - 1);
+                        return audioClips[indexClip];
                 }
             }
 
@@ -81,5 +93,10 @@ namespace VirtueSky.Audio
             if (audioClips.IsNullOrEmpty()) return;
             audioClips.Clear();
         }
+    }
+    public enum SoundType
+    {
+        Sfx,
+        Music
     }
 }

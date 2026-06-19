@@ -31,9 +31,9 @@ namespace VirtueSky.Ads
             App.AddPauseCallback(OnAppStateChange);
             LevelPlay.OnInitSuccess += SdkInitializationCompletedEvent;
             LevelPlay.OnImpressionDataReady += ImpressionDataReadyEvent;
-            adSetting.LevelPlayBannerVariable.Init();
-            adSetting.LevelPlayInterVariable.Init();
-            adSetting.LevelPlayRewardVariable.Init();
+            adSetting.LevelPlayBannerVariable.Init(adSetting);
+            adSetting.LevelPlayInterVariable.Init(adSetting);
+            adSetting.LevelPlayRewardVariable.Init(adSetting);
             LevelPlay.ValidateIntegration();
             LevelPlay.Init(adSetting.AppKey);
 #endif
@@ -63,7 +63,7 @@ namespace VirtueSky.Ads
             SdkInitializationCompleted = true;
             LoadInterstitial();
             LoadRewarded();
-            LoadBanner();
+            //LoadBanner();
         }
 #endif
 

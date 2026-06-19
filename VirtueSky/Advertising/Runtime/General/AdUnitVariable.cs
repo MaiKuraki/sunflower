@@ -1,11 +1,12 @@
 using System;
 using UnityEngine;
 using VirtueSky.Core;
+using VirtueSky.Tracking;
 
 
 namespace VirtueSky.Ads
 {
-    public abstract class AdUnitVariable : ScriptableObject, IAdUnit
+    public abstract class AdUnitVariable : ScriptableObject
     {
         [NonSerialized] internal Action<AdsInfo> loadedCallback;
         [NonSerialized] internal Action<AdsError> failedToLoadCallback;
@@ -13,7 +14,7 @@ namespace VirtueSky.Ads
         [NonSerialized] internal Action<AdsError> failedToDisplayCallback;
         [NonSerialized] internal Action<AdsInfo> closedCallback;
         [NonSerialized] internal Action<AdsInfo> clickedCallback;
-        [NonSerialized] public Action<double, string, string, string, string> paidedCallback;
+        [NonSerialized] public Action<AdsInfo> paidedCallback;
 
         public Action<AdsInfo> OnLoadAdEvent;
         public Action<AdsError> OnFailedToLoadAdEvent;
@@ -24,6 +25,8 @@ namespace VirtueSky.Ads
 
         public abstract bool IsShowing { get; internal set; }
         public abstract bool IsLoading { get; internal set; }
+
+        protected AdSetting adSetting;
         public virtual string Id
         {
             get => "";
@@ -47,8 +50,9 @@ namespace VirtueSky.Ads
 
         public abstract AdUnitVariable Show(string placement = "");
 
-        public virtual void Init()
+        public virtual void Init(AdSetting _adSetting)
         {
+            adSetting = _adSetting;
         }
 
         public virtual void Load()
@@ -68,6 +72,13 @@ namespace VirtueSky.Ads
             if (action == null)
                 return;
             App.RunOnMainThread(action);
+        }
+        protected void TrackRevenue(AdsInfo info)
+        {
+            if (!adSetting.EnableTrackAdRevenue) return;
+            FirebaseAnalyticTrackingRevenue.FirebaseAnalyticTrackRevenue(info.Revenue, info.AdNetwork, info.AdUnitId, info.AdFormat, info.AdMediation);
+            AdjustTrackingRevenue.AdjustTrackRevenue(info.Revenue, info.AdNetwork, info.AdUnitId, info.AdFormat, info.AdMediation);
+            AppsFlyerTrackingRevenue.AppsFlyerTrackRevenueAd(info.Revenue, info.AdNetwork, info.AdUnitId, info.AdFormat, info.AdMediation);
         }
     }
 }
