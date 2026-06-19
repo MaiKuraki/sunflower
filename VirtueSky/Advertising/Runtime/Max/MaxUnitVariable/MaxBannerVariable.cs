@@ -10,7 +10,7 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class MaxBannerVariable : MaxAdUnitVariable
     {
-         public AdsSize size = AdsSize.Banner;
+        public AdsSize size = AdsSize.Banner;
         public AdsPosition position = AdsPosition.Bottom;
 
         private bool _isBannerDestroyed = true;
@@ -21,11 +21,12 @@ namespace VirtueSky.Ads
         public override bool IsShowing { get; internal set; }
         public override bool IsLoading { get; internal set; }
 
-        public override void Init()
+        public override void Init(AdSetting _adSetting)
         {
+            base.Init(_adSetting);
 #if VIRTUESKY_ADS && VIRTUESKY_APPLOVIN
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
-            paidedCallback += AppTracking.TrackRevenue;
+            paidedCallback += TrackRevenue;
             MaxSdkCallbacks.Banner.OnAdLoadedEvent += OnAdLoaded;
             MaxSdkCallbacks.Banner.OnAdExpandedEvent += OnAdExpanded;
             MaxSdkCallbacks.Banner.OnAdLoadFailedEvent += OnAdLoadFailed;
@@ -134,10 +135,7 @@ namespace VirtueSky.Ads
 
         private void OnAdRevenuePaid(string unit, MaxSdkBase.AdInfo info)
         {
-            paidedCallback?.Invoke(info.Revenue,
-                info.NetworkName,
-                unit,
-                info.AdFormat, AdMediation.AppLovin.ToString());
+            paidedCallback?.Invoke(new AdsInfo(info));
         }
 
         private void OnAdLoaded(string unit, MaxSdkBase.AdInfo info)

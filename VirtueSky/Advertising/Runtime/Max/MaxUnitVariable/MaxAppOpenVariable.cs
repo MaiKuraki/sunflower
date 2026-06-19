@@ -10,7 +10,7 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class MaxAppOpenVariable : MaxAdUnitVariable
     {
-         [Tooltip("Automatically show AppOpenAd when app status is changed")]
+        [Tooltip("Automatically show AppOpenAd when app status is changed")]
         public bool autoShow = false;
 
         [Tooltip("Time between closing the previous full-screen ad and starting to show the app open ad - in seconds")]
@@ -19,11 +19,12 @@ namespace VirtueSky.Ads
         public override bool IsShowing { get; internal set; }
         public override bool IsLoading { get; internal set; }
 
-        public override void Init()
+        public override void Init(AdSetting _adSetting)
         {
+            base.Init(_adSetting);
 #if VIRTUESKY_ADS && VIRTUESKY_APPLOVIN
             if (AdStatic.IsRemoveAd || string.IsNullOrEmpty(Id)) return;
-            paidedCallback += AppTracking.TrackRevenue;
+            paidedCallback += TrackRevenue;
             MaxSdkCallbacks.AppOpen.OnAdDisplayedEvent += OnAdDisplayed;
             MaxSdkCallbacks.AppOpen.OnAdHiddenEvent += OnAdHidden;
             MaxSdkCallbacks.AppOpen.OnAdLoadedEvent += OnAdLoaded;
@@ -80,10 +81,7 @@ namespace VirtueSky.Ads
 
         private void OnAdRevenuePaid(string unit, MaxSdkBase.AdInfo info)
         {
-            paidedCallback?.Invoke(info.Revenue,
-                info.NetworkName,
-                unit,
-                info.AdFormat, AdMediation.AppLovin.ToString());
+            paidedCallback?.Invoke(new AdsInfo(info));
         }
 
         private void OnAdLoadFailed(string unit, MaxSdkBase.ErrorInfo info)

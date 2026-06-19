@@ -162,7 +162,6 @@ namespace VirtueSky.Ads
 
         void InitAdClient()
         {
-            AppTracking.Init(adSetting.EnableTrackAdRevenue);
             if (adSetting.IsApplovin())
             {
                 maxAdClient = new MaxAdClient(adSetting);

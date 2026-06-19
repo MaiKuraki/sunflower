@@ -9,6 +9,7 @@ namespace VirtueSky.Ads
         public double Revenue { get; internal set; }
         public string AdMediation { get; internal set; }
         public string AuctionId { get; internal set; }
+        public string Precision { get; internal set; }
 
 #if VIRTUESKY_APPLOVIN
         public AdsInfo(MaxSdkBase.AdInfo info)
@@ -18,6 +19,7 @@ namespace VirtueSky.Ads
             Placement = info.Placement;
             AdNetwork = info.NetworkName;
             Revenue = info.Revenue;
+            Precision = info.RevenuePrecision;
             AdMediation = Ads.AdMediation.AppLovin.ToString();
             AuctionId = "";
         }
@@ -32,11 +34,23 @@ namespace VirtueSky.Ads
             AdNetwork = info.AdNetwork;
             Revenue = (double)info.Revenue;
             AdMediation = Ads.AdMediation.LevelPlay.ToString();
+            Precision = info.Precision;
+            AuctionId = info.AuctionId;
+        }
+        public AdsInfo(Unity.Services.LevelPlay.LevelPlayImpressionData info)
+        {
+            AdUnitId = info.MediationAdUnitId;
+            AdFormat = info.AdFormat;
+            Placement = info.Placement;
+            AdNetwork = info.AdNetwork;
+            Revenue = (double)info.Revenue;
+            AdMediation = Ads.AdMediation.LevelPlay.ToString();
+            Precision = info.Precision;
             AuctionId = info.AuctionId;
         }
 #endif
 
-        public AdsInfo(string adUnitId, string adFormat, string placement, string adNetwork, double revenue, string adMediation, string auctionId)
+        public AdsInfo(string adUnitId, string adFormat, string placement, string adNetwork, double revenue, string adMediation, string auctionId, string precision = "")
         {
             AdUnitId = adUnitId;
             AdFormat = adFormat;
@@ -45,6 +59,7 @@ namespace VirtueSky.Ads
             Revenue = revenue;
             AdMediation = adMediation;
             AuctionId = auctionId;
+            Precision = precision;
         }
 
         public AdsInfo()
@@ -56,6 +71,7 @@ namespace VirtueSky.Ads
             Revenue = 0;
             AdMediation = "";
             AuctionId = "";
+            Precision = "";
         }
 
         public AdsInfo(AdMediation adMediation)
@@ -67,6 +83,7 @@ namespace VirtueSky.Ads
             Revenue = 0;
             AdMediation = adMediation.ToString();
             AuctionId = "";
+            Precision = "";
         }
     }
 

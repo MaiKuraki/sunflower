@@ -14,7 +14,7 @@ namespace VirtueSky.Ads
     [EditorIcon("icon_scriptable")]
     public class AdmobRewardInterVariable : AdmobAdUnitVariable
     {
-         public bool useTestId;
+        public bool useTestId;
         [NonSerialized] internal Action completedCallback;
         [NonSerialized] internal Action skippedCallback;
         [NonSerialized] internal Action receivedRewardCallback;
@@ -29,15 +29,16 @@ namespace VirtueSky.Ads
         public override bool IsShowing { get; internal set; }
         public override bool IsLoading { get; internal set; }
 
-        public override void Init()
+        public override void Init(AdSetting _adSetting)
         {
+            base.Init(_adSetting);
             if (useTestId)
             {
                 GetUnitTest();
             }
 #if VIRTUESKY_ADS && VIRTUESKY_ADMOB
             if (string.IsNullOrEmpty(Id)) return;
-            paidedCallback += AppTracking.TrackRevenue;
+            paidedCallback += TrackRevenue;
 #endif
         }
 
@@ -166,17 +167,15 @@ namespace VirtueSky.Ads
         private void OnAdPaided(AdValue value)
         {
             cacheAdInfo.Revenue = value.Value / 1000000f;
-
-            paidedCallback?.Invoke(cacheAdInfo.Revenue,
-                cacheAdInfo.AdNetwork,
-                Id,
-                cacheAdInfo.AdFormat, AdMediation.Admob.ToString());
+            cacheAdInfo.Precision = value.Precision.ToString();
+            paidedCallback?.Invoke(cacheAdInfo);
         }
 
         private void CacheAdsInfo()
         {
             if (cacheAdInfo != null) cacheAdInfo = null;
             cacheAdInfo = new AdsInfo(AdMediation.Admob);
+            cacheAdInfo.AdUnitId = Id;
             cacheAdInfo.AdFormat = "RewardedInterstitialAd";
             cacheAdInfo.AdNetwork = adsInfo?.GetLoadedAdapterResponseInfo()?.AdSourceName ?? "";
         }
